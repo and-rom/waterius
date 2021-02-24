@@ -1,8 +1,6 @@
 
 Вопросы по изготовлению задавайте тут: [issues](https://github.com/dontsovcmc/waterius/issues)
 
-Изготовление [1й версии платы тут](https://github.com/dontsovcmc/waterius/blob/7da3e404141a7a6a08e866adb6f25db93653b12a/Making.md)
-
 ## Компоненты
 
 | # | Наименование | Кол-во | Примечание | Магазин |   
@@ -20,7 +18,7 @@
 | 11 | Закрытый батарейный отсек 4xAA | 1 | У ЧипДип KLS5-812-B, качество не очень. | [aliexpress](http://s.click.aliexpress.com/e/43K45ruk)(проверенный) [chipdip](https://www.chipdip.ru/product/fc1-5230) |
 | 12 | Стабилизатор MCP1700T-3002E-TT | 1 |  | [terraelectronica](https://www.terraelectronica.ru/product/241237) |
 | 13 | Разъем под кабель на плату 4 контакта 2.54мм | 1 | Без винтов: DG141V-2.54-04P-14-00AH | [terraelectronica](https://www.terraelectronica.ru/product/1072180) |
-| 14 | [Плата](waterius-factory-board2_bottom.jpg) | 1 | или [ЛУТ](https://github.com/dontsovcmc/ImpCounter/raw/master/Board/waterius-homemade-board.png) | [заказ на OshPark](https://oshpark.com/shared_projects/gJDtn5z5) |
+| 14 | [Плата](waterius-factory-board2_bottom.jpg) | 1 | или [ЛУТ](https://github.com/dontsovcmc/ImpCounter/raw/master/Board/waterius-homemade-board.png) | [заказ на OshPark](https://oshpark.com/shared_projects/gJDtn5z5), [Gerber файлы](https://github.com/dontsovcmc/Board/waterius-factory-3.0_2020-11-28.zip) |
 + программаторы для Attiny85 и ESP8266-01
 
 ## Схема
@@ -30,10 +28,13 @@
 
 Вот так выглядит заводская плата с напаенными элеметами:
 
-<img src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board2_top.jpg" data-canonical-src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board2_top.jpg" width="400"/>
-<img src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board2_bottom.jpg" data-canonical-src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board2_bottom.jpg" width="400"/>
+<img src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board3_top.jpg" data-canonical-src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board3_top.jpg" width="400"/>
+<img src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board3_bottom.jpg" data-canonical-src="https://github.com/dontsovcmc/waterius/raw/master/Board/waterius-factory-board3_bottom.jpg" width="400"/>
 
 По фотографии удобно паять.
+
+[1я версия платы](https://github.com/dontsovcmc/waterius/blob/7da3e404141a7a6a08e866adb6f25db93653b12a/Making.md)
+
 
 # Изготовление
 
@@ -41,7 +42,7 @@
 Итак, все компоненты, плата и программаторы у вас есть. 
 
 1. Пайку лучше начинать с резисторов 3к3, 300, конденсаторов. Далее припаять стабилизатор, attiny85, кнопку, светодиод и пин.
-2. Припаять зеленый разъем DG141V на высоте 1.5мм от платы, чтобы его контакты не выступали больше, чем на 0.5-1мм от платы.
+2. Припаять зеленый разъем DG141V, откусить контакты, выступающие больше чем на 0.5-1мм от платы.
 3. Припять черный разъем PBD-8 с небольшим количеством припоя: потом нужно будет откусить контакты, выступающие больше чем на 0.5-1мм от платы.
 4. Проверьте отсутствие коротких замыканий на плате.
 5. Ток потребления с непрошитой Attiny85 со стабилизатором должен быть 300-600мкА.
@@ -50,7 +51,7 @@
 Если он выше, промойте плату от флюса! Один раз мне пришлось отпаивать стабилизатор, мыть и припаивать назад - после высыхания спирта ток возвращался к 120мкА. 
 8. Прошейте ESP с помощью 3.3в usb-ttl.
 9. Ток потребления Ватериуса с только что прошитой ESP, которая не разу не была включена ~2мА.
-10. Удалите светодиод у ESP (см. ниже) либо сделайте это после тестирования.
+10. Удалите светодиод у ESP и резистор (см. ниже) либо сделайте это после тестирования.
 11. Подготовьте корпус Ватериуса и установите в него плату.
 
 Можно пользоваться! =)
