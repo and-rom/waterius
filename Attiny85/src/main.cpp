@@ -110,12 +110,13 @@ static CounterA counter1(1, 1);
 static CounterA counter2(2, 2);
 static CounterA counter3(3, 3);
  
-static LeakPowerB leak_power(2);
-static WaterLeakA waterleak1(5, 5);
-static WaterLeakA waterleak2(7, 7);
+static LeakPowerB leak_power(2); // Питание на датчики протечек 
+WaterLeakA waterleak1(5, 5);
+WaterLeakA waterleak2(7, 7);
+static bool wl_changed = false;
 
 static ButtonB button(1);
-static ESPPowerPin esp(0);      // Питание на ESP 
+static ESPPowerPin esp(0);       // Питание на ESP 
 
 // Данные
 struct Header info = {FIRMWARE_VER, 0, 0, 0, WATERIUS_4C2W, 
@@ -124,9 +125,6 @@ struct Header info = {FIRMWARE_VER, 0, 0, 0, WATERIUS_4C2W,
 					   {0, 0, 0, 0},
 					   0, 0
 					 }; 
-
-struct LeakHeader leak = { WaterLeak_e::NORMAL, WaterLeak_e::NORMAL, 0, 0, 0, 0};
-
 #endif
 
 
@@ -167,10 +165,30 @@ void resetWatchdog() {
 	wdt_reset(); // pat the dog
 } 
 
+#ifdef WATERIUS_4C2W
+// Обновляем статус датчиков протечки
+// force - даже тех, которые отключены были при настройке
+void check_waterleak(bool force)
+{
+	LOG(F("check_waterleak"));
+	leak_power.power(true);
+	if (force || waterleak1.is_work()) {
+		waterleak1.update();
+	}
+	if (force || waterleak2.is_work()) {
+		waterleak2.update();
+	}
+	leak_power.power(false);
+}
+#endif
+
 // Проверяем входы на замыкание. 
 // Замыкание засчитывается только при повторной проверке.
+#ifdef WATERIUS_4C2W
+inline void counting(bool force) {
+#else
 inline void counting() {
-
+#endif
     power_adc_enable(); //т.к. мы обесточили всё а нам нужен компаратор
     adc_enable();       //после подачи питания на adc
 
@@ -204,17 +222,58 @@ inline void counting() {
 	}
 	
 	if ((wdt_count & LEAK_CHECK_PERIOD) == 0) {
-		leak_power.power(true);
-		waterleak1.update();
-		waterleak2.update();
-		leak_power.power(false);
+
+		check_waterleak(force);
+		wl_changed = waterleak1.is_state_changed() || waterleak2.is_state_changed();
+		if (wl_changed) {
+			slaveI2C.alarm_sent = false;
+		}
 	}
 #endif
 
 	adc_disable();
     power_adc_disable();
-
 }
+
+// Загрузка настроек из EEPROM
+void load_settings(uint16_t shift)
+{
+	info.resets = EEPROM.read(shift);
+
+#ifdef WATERIUS_4C2W
+	uint8_t sett = EEPROM.read(shift+1);
+	waterleak1.set_work(sett & 0x01);
+	waterleak2.set_work(sett & 0x02);
+
+	LOG(F("Settings load: "));
+	LOG(sett);
+#endif
+}
+
+// Сохранение настроек в EEPROM
+void save_settings(uint16_t shift)
+{
+	EEPROM.write(shift, info.resets);
+
+#ifdef WATERIUS_4C2W
+	uint8_t sett = waterleak1.is_work() | (waterleak2.is_work() << 1);
+	EEPROM.write(shift+1, sett);
+
+	LOG(F("Settings save: "));
+	LOG(sett);
+#endif
+}
+
+// Требуется пробуждение
+bool need_wake_up() {
+
+#ifdef WATERIUS_4C2W
+	return (wl_changed && !slaveI2C.alarm_sent) || button.pressed();
+#else
+	return button.pressed();
+#endif
+}
+
 
 // Настройка. Вызывается однократно при запуске.
 void setup() {
@@ -225,18 +284,20 @@ void setup() {
 	ACSR |= bit( ACD ); //выключаем компаратор  TODO: не понятно, м.б. его надо повторно выключать в цикле 
 	interrupts();
 	resetWatchdog(); 
-	//adc_disable(); //выключаем ADC. Теперь в цикле вкл/выкл, тут не нужен.
-
-	if (storage.get(info.data)) { //не первая загрузка
-		info.resets = EEPROM.read(storage.size());
-		info.resets++;
-		EEPROM.write(storage.size(), info.resets);
-	} else {
-		EEPROM.write(storage.size(), 0);
-	}
 
 	LOG_BEGIN(9600); 
 	LOG(F("==== START ===="));
+
+	if (storage.get(info.data)) { 
+		//не первая загрузка
+		load_settings(storage.size());
+		info.resets++;
+
+		save_settings(storage.size());
+	} else {
+		save_settings(storage.size());
+	}
+
 	LOG(F("MCUSR"));
 	LOG(info.service);
 	LOG(F("RESET"));
@@ -253,27 +314,6 @@ void setup() {
 #endif
 }
 
-bool need_wake_up() {
-#if defined(WATERIUS_2C)
-
-	return button.pressed();
-
-#else
-	if ((wdt_count & LEAK_CHECK_PERIOD) == 0) {
-		if (!waterleak1.is_ok() || !waterleak2.is_ok()) {
-			if (!slaveI2C.alarm_sent) {
-				return true;  // просыпаемся
-			}
-		} else {
-			slaveI2C.alarm_sent = false;
-		} 
-	}
-	
-	return button.pressed();
-#endif
-}
-
-
 // Главный цикл, повторящийся раз в сутки или при настройке вотериуса
 void loop() {
 	power_all_disable();  // Отключаем все лишнее: ADC, Timer 0 and 1, serial interface
@@ -288,13 +328,16 @@ void loop() {
 		wdt_count = WAKE_EVERY_MIN;
 		while ( wdt_count > 0 ) {
 			noInterrupts();
-
+			
 			if (need_wake_up()) { 
 				interrupts();  // Пользователь нажал кнопку
 				break;
 			} else 	{
+#ifdef WATERIUS_4C2W
+				counting(false);
+#else				
 				counting(); //Опрос входов. Тут т.к. https://github.com/dontsovcmc/waterius/issues/76
-
+#endif
 				interrupts();
 				sleep_mode();  // Спим (WDTCR)
 			}
@@ -315,10 +358,12 @@ void loop() {
 	LOG(info.data.value2);
 	LOG(info.data.value3);
 
-	leak.state1 = waterleak1.state;
-	leak.state2 = waterleak2.state;
-	leak.adc1 = waterleak1.adc;
-	leak.adc2 = waterleak2.adc;
+	LOG(F("Waterleak 1: "));
+	LOG(waterleak1.state);
+	LOG(waterleak1.adc);
+	LOG(F("Waterleak 2: "));
+	LOG(waterleak2.state);
+	LOG(waterleak2.adc);
 #endif
 	// Если пользователь нажал кнопку SETUP, ждем когда отпустит 
 	// иначе ESP запустится в режиме программирования (да-да кнопка на i2c и 2 пине ESP)
@@ -343,7 +388,11 @@ void loop() {
 
 		info.voltage = readVcc();   // Текущее напряжение
 
+#ifdef WATERIUS_4C2W
+		counting(SlaveI2C::setup_mode == SETUP_MODE);
+#else
 		counting();
+#endif
 		delayMicroseconds(65000);
 
 		if (button.wait_release() > LONG_PRESS_MSEC) {
@@ -358,5 +407,13 @@ void loop() {
 		LOG(F("ESP wake up fail"));
 	} else {
 		LOG(F("Sleep received"));
+
+#ifdef WATERIUS_4C2W
+		if (SlaveI2C::setup_mode == SETUP_MODE) {
+			waterleak1.turn_off_if_break();
+			waterleak2.turn_off_if_break();
+			save_settings(storage.size());
+		}
+#endif
 	}
 }
